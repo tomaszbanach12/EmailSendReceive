@@ -15,7 +15,7 @@ namespace EmailSendReceive
 {
     class Program
     {
-        static bool IsValidEmail(string email)
+        static bool IsValidEmail(string email)  //walidacja formatu e-maila
         {
             try
             {
@@ -83,7 +83,7 @@ namespace EmailSendReceive
             IList<UniqueId> uids = client.Inbox.Search(SearchQuery.All);    //pobieramy wszystkie e-maile ze skrzynki (najstarsze na początku, najnowsze na końcu)
             MimeMessage mimeMessageReceiveEmail = client.Inbox.GetMessage(uids[uids.Count - 1]);    //pobieramy najnowszy e-mail i umieszczamy go w obiekcie mimeMessageReceiveEmail
             client.Disconnect(true);    //rozłączamy się
-            if (mimeMessageReceiveEmail.From.ToString() != from)
+            if (mimeMessageReceiveEmail.From.ToString() != from)    //odebranie e-maila nie powiodło się
             {
                 mimeMessageReceiveEmail = null;
             }
@@ -133,22 +133,22 @@ namespace EmailSendReceive
             string data = r.ReadToEnd();
             JObject jsonObject = JObject.Parse(data); //do konwersji pliku JSON posłużyłem się biblioteką Newtonsoft.Json (NuGet Command: PM> Install-Package Newtonsoft.Json)
             bool resultMain = SendEmail(jsonObject["smtpHost"].ToString(), Convert.ToInt32(jsonObject["smtpPort"]), login, password, jsonObject["to"].ToString(), jsonObject["subject"].ToString(), crypto.Encypt(jsonObject["textBody"].ToString()));    //wywołujemy funkcję SendEmail aby wysłać e-mail. W parametrze textBody przesyłamy zaszyfrowaną wiadomość za pomocą funkcji Encrypt korzystającej z klucza publicznego
-            if (resultMain == true)
+            if (resultMain == true) //wysyłka e-maila powiodła się
             {
                 Console.WriteLine("~~E-mail sended~~");
             }
-            else
+            else //wysyłka e-maila nie powiodła się
             {
                 Console.WriteLine("~~E-mail not sended~~");
                 Environment.Exit(1);
             }  
             Console.Write(Environment.NewLine);
             MimeMessage mimeMessageMain = ReceiveEmail(jsonObject["imapHost"].ToString(), Convert.ToInt32(jsonObject["imapPort"]), login, password);    //aby odczytać wiadomość wywołujemy funkcję ReceiveEmail, którą zapisujemy do zmiennej mimeMessageMain
-            if (mimeMessageMain != null)
+            if (mimeMessageMain != null) //odebranie e-maila powiodło się
             {
                 Console.WriteLine("~~E-mail received~~");
-            }  
-            else
+            }
+            else //odebranie e-maila nie powiodło się
             {
                 Console.WriteLine("~~E-mail not received~~");
                 Environment.Exit(1);
