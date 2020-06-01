@@ -1,94 +1,168 @@
 ﻿using MailKit;
 using MailKit.Net.Imap;
+using MailKit.Net.Smtp;
 using MailKit.Search;
 using MailKit.Security;
 using MimeKit;
+using MimeKit.Cryptography;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
-using System.Net.Mail;
+
 using System.Security;
 
 namespace EmailSendReceive
 {
     class Email
     {
-        public static bool IsValidEmail(string email)  //walidacja formatu e-maila
+        public static void IsValidEmail(string email)  //walidacja formatu e-maila
         {
-            try
+            System.Net.Mail.MailAddress addr = new System.Net.Mail.MailAddress(email);
+            if (addr.Address != email)
             {
-                var addr = new System.Net.Mail.MailAddress(email);
-                return addr.Address == email;
-            }
-            catch
-            {
-                return false;
+                Console.WriteLine("~~Wrong E-mail format~~");
+                Environment.Exit(1);
             }
         }
 
-        public static bool SendEmail(string smtpHost, Int32 smtpPort, string from, SecureString password, string to, string subject, string textBodyEncrypt) //funkcja odpowiadająca za wysyłanie naszego e-maila
+        public static bool EmailDKIMOrNo()
         {
-            bool result = false;
-            SmtpClient smtpClient = new SmtpClient(smtpHost, smtpPort); //inicjalizujemy obiekt 
-            smtpClient.Credentials = new NetworkCredential(from, password); //załączamy poświadczenia
-            smtpClient.EnableSsl = true;    //umożliwamy szyfrowanie e-maila poprzez protokół SSL 
-
-            MailMessage mailMessage = new MailMessage(from, to, subject, textBodyEncrypt); //inicjalizujemy obiekt mailMessage 
-            mailMessage.BodyEncoding = System.Text.Encoding.UTF8;   //wybieramy sposób kodowania e-maila UTF8
-            try
+            bool response;
+            string input;
+            while (true)
             {
-                smtpClient.Send(mailMessage);   //wysyłanie e-maila
-                result = true;
-            }
-            catch (SmtpFailedRecipientsException ex)    //obsługa wyjątków
-            {
-                for (int i = 0; i < ex.InnerExceptions.Length; i++) //iteracja po błędach 
+                Console.Write("Do you want to send e-mail with DKIM? [y/n]: ");
+                input = Console.ReadLine();
+                if (input.ToUpper() == "Y")
                 {
-                    SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
-                    if (status == SmtpStatusCode.MailboxBusy || status == SmtpStatusCode.MailboxUnavailable) //jeśli nie mogliśmy wysłać e-maila 
+                    response = true;
+                    break;
+                }
+                else if (input.ToUpper() == "N")
+                {
+                    response = false;
+                    break;
+                }
+            }
+
+            return response;
+        }
+
+        public static SecureString PasswordReader()
+        {
+            SecureString passwordEmail = new SecureString();
+            do
+            {
+                ConsoleKeyInfo key = Console.ReadKey(true); //odczytaj wprowadzoną litere
+                if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter) //jeśli wciśniety klawisz nie jest backspace oraz enter
+                {
+                    passwordEmail.AppendChar(key.KeyChar);   //dodaj do zmiennej password literę którą wprowadziliśmy
+                    Console.Write("*");         //wyświetl * 
+                }
+                else
+                {
+                    if (key.Key == ConsoleKey.Backspace && passwordEmail.Length > 0) //jeśli wciśniety klawisz jest backspace oraz zmienna password jest większa od 0
                     {
-                        Console.WriteLine("~~Delivery failed - retrying in 5 seconds~~");
-                        System.Threading.Thread.Sleep(5000);
-                        smtpClient.Send(from, to, subject, textBodyEncrypt); //próbujemy wysłać e-maila ponownie co 5 sekund
+                        passwordEmail.RemoveAt(passwordEmail.Length - 1); //usun ze zmiennej password literę którą wprowadziliśmy 
+                        Console.Write("\b \b"); //usuń z wyświetlania znak backspace oraz literę którą wprowadziliśmy
                     }
-                    else
+                    else if (key.Key == ConsoleKey.Enter)   //jeśli wciśniety klawisz jest enterem
                     {
-                        Console.WriteLine("~~Failed to deliver message to {0}~~", ex.InnerExceptions[i].FailedRecipient);   //wysyłka e-maila nie powiodła się
+                        break;  //wyjdz z pętli
                     }
                 }
+            } while (true);
+
+            return passwordEmail;
+        }
+
+        public static void SendEmail(string smtpHost, Int32 smtpPort, string from, SecureString password, string to, string subject, string bodyEmail, bool isDkimEmail, string txtDKIMPath)
+        {
+            SmtpClient smtpClient = new SmtpClient();   //inicjalizacja klienta smtp z przestrzeni nazw MailKit.Net.Smtp
+            try
+            {
+                smtpClient.Connect(smtpHost, smtpPort, SecureSocketOptions.StartTls);   //łączymy się 
+            }
+            catch (SmtpProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~Cannot connect with client: {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+            smtpClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);
+            smtpClient.SslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+            MimeMessage mimeMessage = new MimeMessage();    //inicjalizujemy obiekt mailMessage 
+
+            if (isDkimEmail)
+            {
+                string domain = from.Split("@")[1];
+
+                HeaderId[] headers = new HeaderId[] { HeaderId.From, HeaderId.Subject, HeaderId.Date };
+                DkimSigner signer = new DkimSigner(txtDKIMPath, domain, "mail", DkimSignatureAlgorithm.RsaSha256)
+                {
+                    HeaderCanonicalizationAlgorithm = DkimCanonicalizationAlgorithm.Relaxed,
+                    BodyCanonicalizationAlgorithm = DkimCanonicalizationAlgorithm.Relaxed,
+                    AgentOrUserIdentifier = "@" + domain,
+                    QueryMethod = "dns/txt",
+                };
+
+                //message.Prepare(EncodingConstraint.SevenBit);
+                //message.Prepare(EncodingConstraint.EightBit);
+
+                signer.Sign(mimeMessage, headers);
+            }
+
+            mimeMessage.From.Add(new MailboxAddress(from));
+            mimeMessage.To.Add(new MailboxAddress(from));
+            mimeMessage.Subject = subject;
+            BodyBuilder bodyBuilder = new BodyBuilder();
+            bodyBuilder.TextBody = bodyEmail;
+            mimeMessage.Body = bodyBuilder.ToMessageBody();
+            try
+            {
+                smtpClient.Send(mimeMessage);   //wysyłanie e-maila
             }
             catch (Exception ex)
             {
-                Console.WriteLine("~~Exception caught in RetryIfBusy(): {0}~~", ex.ToString());
+                Console.WriteLine("~~Failed to deliver message to {0}~~", ex.ToString());
+                Environment.Exit(1);
             }
-
-            return result;
+            smtpClient.Disconnect(true);
+            Console.WriteLine("~~E-mail sent~~");
         }
 
         public static MimeMessage ReceiveEmail(string imapHost, Int32 imapPort, string from, SecureString password)   //funkcja odpowiadająca za odbieranie ostatniego e-maila (tego którego wysłaliśmy)
         {
-            ImapClient client = new ImapClient();   //inicjalizujemy obiekt imapClient
+            ImapClient imapClient = new ImapClient();   //inicjalizacja klienta imap z przestrzeni nazw MailKit.Net.ImapClient
             try
             {
-                client.Connect(imapHost, imapPort, SecureSocketOptions.SslOnConnect);   //łączymy się 
+                imapClient.Connect(imapHost, imapPort, SecureSocketOptions.SslOnConnect);   //łączymy się 
             }
             catch (ImapProtocolException ex)    //obsługa wyjątku
             {
                 Console.WriteLine("~~Cannot connect with client: {0}~~", ex.ToString());
+                Environment.Exit(1);
             }
+            imapClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);   //autentykacja
+            imapClient.SslProtocols = System.Security.Authentication.SslProtocols.Tls12;
+            imapClient.Inbox.Open(FolderAccess.ReadOnly);   //otwieramy skrzynkę e-mail
 
-            client.Authenticate(from, new System.Net.NetworkCredential(string.Empty, password).Password);   //autentykacja
-            client.Inbox.Open(FolderAccess.ReadOnly);   //otwieramy skrzynkę e-mail
-
-            IList<UniqueId> uids = client.Inbox.Search(SearchQuery.All);    //pobieramy wszystkie e-maile ze skrzynki (najstarsze na początku, najnowsze na końcu)
-            MimeMessage mimeMessageReceiveEmail = client.Inbox.GetMessage(uids[uids.Count - 1]);    //pobieramy najnowszy e-mail i umieszczamy go w obiekcie mimeMessageReceiveEmail
-            client.Disconnect(true);    //rozłączamy się
+            IList<UniqueId> uids = imapClient.Inbox.Search(SearchQuery.All);    //pobieramy wszystkie e-maile ze skrzynki (najstarsze na początku, najnowsze na końcu)
+            MimeMessage mimeMessageReceiveEmail = imapClient.Inbox.GetMessage(uids[uids.Count - 1]);    //pobieramy najnowszy e-mail i umieszczamy go w obiekcie mimeMessageReceiveEmail
+            imapClient.Disconnect(true);    //rozłączamy się
             if (mimeMessageReceiveEmail.From.ToString() != from)    //odebranie e-maila nie powiodło się
             {
                 mimeMessageReceiveEmail = null;
             }
 
             return mimeMessageReceiveEmail; //zwracamy obiekt mimeMessage
+        }
+
+        public static void SaveEmlFile(MimeMessage mimeMessageEmail)
+        {
+            string emlDir = string.Format(Directory.GetCurrentDirectory() + "\\{0}.eml", mimeMessageEmail.MessageId);    //zmienna emlDir do przetrzymywania ścieżki nowo wygenerowanego pliku
+            mimeMessageEmail.WriteTo(emlDir); // write the message to a file
+            Console.WriteLine("E-mail file saved at: {0}", emlDir); //wyświetl ścieżkę gdzie zapisaliśmy plik EML
         }
     }
 }

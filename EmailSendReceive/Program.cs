@@ -1,14 +1,6 @@
-﻿using MailKit;
-using MailKit.Net.Imap;
-using MailKit.Search;
-using MailKit.Security;
-using MimeKit;
+﻿using MimeKit;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Net.Mail;
 using System.Security;
 
 namespace EmailSendReceive
@@ -18,96 +10,61 @@ namespace EmailSendReceive
         static void Main(string[] args) //funkcja główna
         {
             string login;   //zmienna do przetrzymywania loginu
-            SecureString password = new SecureString(); //obiekt do przetrzymywania hasła
+            SecureString passwordProgram = new SecureString(); //obiekt do przetrzymywania hasła
             Console.Write("E-mail adress: ");
             login = Console.ReadLine(); //podaj login
-            if (!Email.IsValidEmail(login))
-            {
-                Console.WriteLine("~~Wrong E-mail format~~");
-                Environment.Exit(1);
-            }
+            Email.IsValidEmail(login);  //funkcja odpowiadająca za walidacje e-maila
             Console.Write("E-mail password: ");
-
-            do
-            {
-                ConsoleKeyInfo key = Console.ReadKey(true); //odczytaj wprowadzoną litere
-                if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter) //jeśli wciśniety klawisz nie jest backspace oraz enter
-                {
-                    password.AppendChar(key.KeyChar);   //dodaj do zmiennej password literę którą wprowadziliśmy
-                    Console.Write("*");         //wyświetl * 
-                }
-                else
-                {
-                    if (key.Key == ConsoleKey.Backspace && password.Length > 0) //jeśli wciśniety klawisz jest backspace oraz zmienna password jest większa od 0
-                    {
-                        password.RemoveAt(password.Length - 1); //usun ze zmiennej password literę którą wprowadziliśmy 
-                        Console.Write("\b \b"); //usuń z wyświetlania znak backspace oraz literę którą wprowadziliśmy
-                    }
-                    else if (key.Key == ConsoleKey.Enter)   //jeśli wciśniety klawisz jest enterem
-                    {
-                        break;  //wyjdz z pętli
-                    }
-                }
-            } while (true);
+            passwordProgram = Email.PasswordReader();   //funkcja odpowiadająca za wczytywanie hasła
 
             Crypto crypto = new Crypto();   //inicjalizacja obiektu Crypto
-            Console.Write(Environment.NewLine); 
-            Console.Write("Provide the path of the JSON file to send and read data: ");
-            string path = Console.ReadLine();   //wprowadzamy ściezkę do pliku z parametrami
-            StreamReader r = new StreamReader(path);
-            string data = r.ReadToEnd();
-            JObject jsonObject = JObject.Parse(data); //do konwersji pliku JSON posłużyłem się biblioteką Newtonsoft.Json (NuGet Command: PM> Install-Package Newtonsoft.Json)
-            string textEncyptToSend = crypto.Encypt(jsonObject["textBody"].ToString());
-            //string checksumToSend = crypto.CreateMD5(textEncyptToSend);
-            string checksumToSend = crypto.CreateSha256Hash(textEncyptToSend);
-            string textBodyEncyptMain = String.Format("{0}{1}{2}", textEncyptToSend, Environment.NewLine, checksumToSend);
-            bool resultMain = Email.SendEmail(jsonObject["smtpHost"].ToString(), Convert.ToInt32(jsonObject["smtpPort"]), login, password, jsonObject["to"].ToString(), jsonObject["subject"].ToString(), textBodyEncyptMain);   //wywołujemy funkcję SendEmail aby wysłać e-mail. W parametrze textBody przesyłamy zaszyfrowaną wiadomość za pomocą funkcji Encrypt korzystającej z klucza publicznego
-            if (resultMain == true) //wysyłka e-maila powiodła się
-            {
-                Console.WriteLine("~~E-mail sended~~");
-            }
-            else //wysyłka e-maila nie powiodła się
-            {
-                Console.WriteLine("~~E-mail not sended~~");
-                Environment.Exit(1);
-            }  
             Console.Write(Environment.NewLine);
-            MimeMessage mimeMessageMain = Email.ReceiveEmail(jsonObject["imapHost"].ToString(), Convert.ToInt32(jsonObject["imapPort"]), login, password);    //aby odczytać wiadomość wywołujemy funkcję ReceiveEmail, którą zapisujemy do zmiennej mimeMessageMain
-            if (mimeMessageMain != null) //odebranie e-maila powiodło się
+            Console.Write("Provide the path of the JSON file to send and read data: ");
+            string jsonPath = Console.ReadLine();   //wprowadzamy ściezkę do pliku z parametrami
+
+            JObject jsonObjectProg = JSON.JSONParser(jsonPath); //funkcja odpowiadająca za parsowanie z pliku do obiektu typu JSON
+
+            string textEncyptToSend = crypto.Encypt(jsonObjectProg["textBody"].ToString()); //funkcja odpowiadająca za szyfrowanie treści wiadomości
+            string checksumToSend = crypto.CreateSha256Hash(textEncyptToSend);  //funkcja odpowiadająca za generowanie sumy kontrolnej zaszyfrowanej treści wiadomosci
+            string bodyProg = String.Format("{0}{1}{2}", textEncyptToSend, Environment.NewLine, checksumToSend);    //cała wiadomość ma nastepującą formę: zaszyfrowana wiadomość + znak nowej linii + suma kontrolna zaszyfrowanej wiadmosci
+
+            string txtPath = "";    //zmienna gdzie bedziemy przetrzymywać lokalizacje pliku z wzorem podpisu cyfrowego
+            bool isDkimProg = Email.EmailDKIMOrNo();    // funckja gdzie decydujemy czy nasz e-mail ma miec podpis cyfrowy bądz nie
+            if (isDkimProg) //jeśli e-mail ma mieć podpid cyfrowy
             {
-                Console.WriteLine("~~E-mail received~~");
+                Console.Write("Provide the path of the TXT file to with DKIM: ");   //to podaj ścieżkę pliku z wzorem podpisu cyfrowego
+                txtPath = Console.ReadLine();
             }
-            else //odebranie e-maila nie powiodło się
+
+            Email.SendEmail(jsonObjectProg["smtpHost"].ToString(), Convert.ToInt32(jsonObjectProg["smtpPort"]), login, passwordProgram, jsonObjectProg["to"].ToString(), jsonObjectProg["subject"].ToString(), bodyProg, isDkimProg, txtPath);   //wywołujemy funkcję SendEmail aby wysłać e-mail. W parametrze textBody przesyłamy zaszyfrowaną wiadomość za pomocą funkcji Encrypt korzystającej z klucza publicznego
+
+            Console.Write(Environment.NewLine);
+            MimeMessage mimeMessageProg = Email.ReceiveEmail(jsonObjectProg["imapHost"].ToString(), Convert.ToInt32(jsonObjectProg["imapPort"]), login, passwordProgram);    //aby odczytać wiadomość wywołujemy funkcję ReceiveEmail, którą zapisujemy do zmiennej mimeMessageProg
+
+            string textEncyptToRead = mimeMessageProg.TextBody.Split(Environment.NewLine)[0];
+            string checksumToRead = mimeMessageProg.TextBody.Split(Environment.NewLine)[1];
+            if (checksumToSend == checksumToRead)   //jeśli sumy kontrole są takie same
             {
-                Console.WriteLine("~~E-mail not received~~");
-                Environment.Exit(1);
-            }
-            string textEncyptToRead = mimeMessageMain.TextBody.Split(Environment.NewLine)[0];
-            string checksumToRead = mimeMessageMain.TextBody.Split(Environment.NewLine)[1];
-            if (checksumToSend == checksumToRead)
-            {
-                Console.WriteLine("~~E-mail checksum correct~~");
+                Console.WriteLine("~~E-mail checksum correct~~");   //wyświetl informację że suma kontrolna jest prawidłowa
             }
             else
             {
-                Console.WriteLine("~~E-mail checksum not correct~~");
+                Console.WriteLine("~~E-mail checksum not correct~~");   //wyświetl informację że suma kontrolna jest nie prawidłowa
                 Environment.Exit(1);
             }
-            Console.WriteLine("Message ID: {0}", mimeMessageMain.MessageId);    //wyświetlamy takie parametry jak: id wiadomości, do kogo, date wysłania, temat
-            Console.WriteLine("From: {0}", mimeMessageMain.From);   //od kogo
-            Console.WriteLine("To: {0}", mimeMessageMain.To);   //do kogo
-            Console.WriteLine("Date: {0}", mimeMessageMain.Date);   //data wysłania
-            Console.WriteLine("Subject: {0}", mimeMessageMain.Subject); //temat
-            
-            Console.WriteLine(mimeMessageMain.Body.ContentType);    //identyfikator formatu wiadomości
+            Console.WriteLine("Message ID: {0}", mimeMessageProg.MessageId);    //wyświetlamy takie parametry jak: id wiadomości, do kogo, date wysłania, temat
+            Console.WriteLine("From: {0}", mimeMessageProg.From);   //od kogo
+            Console.WriteLine("To: {0}", mimeMessageProg.To);   //do kogo
+            Console.WriteLine("Date: {0}", mimeMessageProg.Date);   //data wysłania
+            Console.WriteLine("Subject: {0}", mimeMessageProg.Subject); //temat
+
+            Console.WriteLine(mimeMessageProg.Body.ContentType);    //identyfikator formatu wiadomości
             Console.WriteLine("textBody message (encypted): {0}", textEncyptToRead);    //wyświetlamy zaszyfrowaną treść wiadomości
             Console.WriteLine("textBody message (decrypted): {0}", crypto.Decrypt(textEncyptToRead));   //wyświetlamy treść wiadomości odszyfrowaną funkcją Decrypt korzystającej z klucza prywatnego
             Console.WriteLine("textBody checksum: {0}", checksumToRead);   //wyświetlamy sume kontrolną wiadomości 
             Console.Write(Environment.NewLine);
-            
-            string emlDir = string.Format(Directory.GetCurrentDirectory() + "\\{0}.eml", mimeMessageMain.MessageId);    //zmienna emlDir do przetrzymywania ścieżki nowo wygenerowanego pliku
-            mimeMessageMain.WriteTo(emlDir); // write the message to a file
-            Console.WriteLine("E-mail file saved at: {0}", emlDir); //wyświetl ścieżkę gdzie zapisaliśmy plik EML
+
+            Email.SaveEmlFile(mimeMessageProg); //funkcja zapisująca e-maila do pliku .eml
         }
     }
 }
