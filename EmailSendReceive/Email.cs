@@ -26,7 +26,7 @@ namespace EmailSendReceive
             }
         }
 
-        public static bool EmailDKIMOrNo()
+        public static bool EmailDKIMOrNo()  
         {
             bool response;
             string input;
@@ -112,12 +112,12 @@ namespace EmailSendReceive
                 signer.Sign(mimeMessage, headers);
             }
 
-            mimeMessage.From.Add(new MailboxAddress(from));
-            mimeMessage.To.Add(new MailboxAddress(from));
-            mimeMessage.Subject = subject;
-            BodyBuilder bodyBuilder = new BodyBuilder();
-            bodyBuilder.TextBody = bodyEmail;
-            mimeMessage.Body = bodyBuilder.ToMessageBody();
+            mimeMessage.From.Add(new MailboxAddress(from)); //od kogo e-mail
+            mimeMessage.To.Add(new MailboxAddress(from));   //do kogo
+            mimeMessage.Subject = subject;  //temat
+            BodyBuilder bodyBuilder = new BodyBuilder();    //bodyBuilder do tworzenia treści e-maila
+            bodyBuilder.TextBody = bodyEmail;   //tekst treści
+            mimeMessage.Body = bodyBuilder.ToMessageBody(); //wrzucenie tekstu bodyBuildera do treści e-maila 
             try
             {
                 smtpClient.Send(mimeMessage);   //wysyłanie e-maila
@@ -150,9 +150,14 @@ namespace EmailSendReceive
             IList<UniqueId> uids = imapClient.Inbox.Search(SearchQuery.All);    //pobieramy wszystkie e-maile ze skrzynki (najstarsze na początku, najnowsze na końcu)
             MimeMessage mimeMessageReceiveEmail = imapClient.Inbox.GetMessage(uids[uids.Count - 1]);    //pobieramy najnowszy e-mail i umieszczamy go w obiekcie mimeMessageReceiveEmail
             imapClient.Disconnect(true);    //rozłączamy się
-            if (mimeMessageReceiveEmail.From.ToString() != from)    //odebranie e-maila nie powiodło się
+            if (mimeMessageReceiveEmail.From.ToString() == from)    //odebranie e-maila powiodło się
             {
-                mimeMessageReceiveEmail = null;
+                Console.WriteLine("~~E-mail received~~");
+            }
+            else
+            {       
+                Console.WriteLine("~~E-mail not received~~");   //odebranie e-maila nie powiodło się
+                Environment.Exit(1);
             }
 
             return mimeMessageReceiveEmail; //zwracamy obiekt mimeMessage
