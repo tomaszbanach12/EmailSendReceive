@@ -84,12 +84,38 @@ namespace EmailSendReceive
             {
                 smtpClient.Connect(smtpHost, smtpPort, SecureSocketOptions.StartTls);   //łączymy się 
             }
-            catch (SmtpProtocolException ex)    //obsługa wyjątku
+            catch (SmtpCommandException ex) //obsługa wyjątku
             {
-                Console.WriteLine("~~Cannot connect with client: {0}~~", ex.ToString());
+                Console.WriteLine("~~Cannot connect with client (SMTP Command Exception): {0}~~", ex.ToString());
                 Environment.Exit(1);
             }
-            smtpClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);
+            catch (SmtpProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~Cannot connect with client (SMTP Protocol Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+
+            try
+            {
+                smtpClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);
+            }
+            catch (AuthenticationException ex)  //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (Authentication Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+            catch (SmtpCommandException ex) //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (SMTP Command Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+            catch (SmtpProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (SMTP Protocol Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+
+
             smtpClient.SslProtocols = System.Security.Authentication.SslProtocols.Tls12;
             MimeMessage mimeMessage = new MimeMessage();    //inicjalizujemy obiekt mailMessage 
 
@@ -122,13 +148,18 @@ namespace EmailSendReceive
             {
                 smtpClient.Send(mimeMessage);   //wysyłanie e-maila
             }
-            catch (Exception ex)
+            catch (SmtpCommandException ex) //obsługa wyjątku
             {
-                Console.WriteLine("~~Failed to deliver message to {0}~~", ex.ToString());
+                Console.WriteLine("~~E-mail has not been sent (SMTP Command Exception): {0}", ex.Message);
                 Environment.Exit(1);
             }
-            smtpClient.Disconnect(true);
+            catch (SmtpProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~E-mail has not been sent (SMTP Protocol Exception): {0}", ex.Message);
+                Environment.Exit(1);
+            }
             Console.WriteLine("~~E-mail sent~~");
+            smtpClient.Disconnect(true);
         }
 
         public static MimeMessage ReceiveEmail(string imapHost, Int32 imapPort, string from, SecureString password)   //funkcja odpowiadająca za odbieranie ostatniego e-maila (tego którego wysłaliśmy)
@@ -138,12 +169,37 @@ namespace EmailSendReceive
             {
                 imapClient.Connect(imapHost, imapPort, SecureSocketOptions.SslOnConnect);   //łączymy się 
             }
-            catch (ImapProtocolException ex)    //obsługa wyjątku
+            catch (ImapCommandException ex) //obsługa wyjątku
             {
-                Console.WriteLine("~~Cannot connect with client: {0}~~", ex.ToString());
+                Console.WriteLine("~~Cannot connect with client (IMAP Command Exception): {0}~~", ex.ToString());
                 Environment.Exit(1);
             }
-            imapClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);   //autentykacja
+            catch (ImapProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~Cannot connect with client (IMAP Protocol Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+
+            try
+            {
+                imapClient.Authenticate(from, new NetworkCredential(string.Empty, password).Password);   //autentykacja
+            }
+            catch (AuthenticationException ex)  //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (Authentication Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+            catch (ImapCommandException ex) //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (IMAP Command Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+            catch (ImapProtocolException ex)    //obsługa wyjątku
+            {
+                Console.WriteLine("~~Authentication error (IMAP Protocol Exception): {0}~~", ex.ToString());
+                Environment.Exit(1);
+            }
+
             imapClient.SslProtocols = System.Security.Authentication.SslProtocols.Tls12;
             imapClient.Inbox.Open(FolderAccess.ReadOnly);   //otwieramy skrzynkę e-mail
 
