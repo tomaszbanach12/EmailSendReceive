@@ -13,33 +13,33 @@ namespace EmailSendReceive
             SecureString passwordProgram = new SecureString(); //obiekt do przetrzymywania hasła
             Console.Write("E-mail adress: ");
             login = Console.ReadLine(); //podaj login
-            Email.IsValidEmail(login);  //funkcja odpowiadająca za walidacje e-maila
+            EmailHandler.IsValidEmail(login);  //funkcja odpowiadająca za walidacje e-maila
             Console.Write("E-mail password: ");
-            passwordProgram = Email.PasswordReader();   //funkcja odpowiadająca za wczytywanie hasła
+            passwordProgram = EmailHandler.PasswordReader();   //funkcja odpowiadająca za wczytywanie hasła
 
             Crypto crypto = new Crypto();   //inicjalizacja obiektu Crypto
             Console.Write(Environment.NewLine);
             Console.Write("Provide the path of the JSON file to send and read data: ");
             string jsonPath = Console.ReadLine();   //wprowadzamy ściezkę do pliku z parametrami
 
-            JObject jsonObjectProg = JSON.JSONParser(jsonPath); //funkcja odpowiadająca za parsowanie z pliku do obiektu typu JSON
+            EmailParams jsonObjectProg = JsonParser.DeserializeObject(jsonPath); //funkcja odpowiadająca za parsowanie z pliku do obiektu typu JSON
 
-            string textEncyptToSend = crypto.Encypt(jsonObjectProg["textBody"].ToString()); //funkcja odpowiadająca za szyfrowanie treści wiadomości
+            string textEncyptToSend = crypto.Encypt(jsonObjectProg.textBody); //funkcja odpowiadająca za szyfrowanie treści wiadomości
             string checksumToSend = crypto.CreateSha256Hash(textEncyptToSend);  //funkcja odpowiadająca za generowanie sumy kontrolnej zaszyfrowanej treści wiadomosci
             string bodyProg = String.Format("{0}{1}{2}", textEncyptToSend, Environment.NewLine, checksumToSend);    //cała wiadomość ma nastepującą formę: zaszyfrowana wiadomość + znak nowej linii + suma kontrolna zaszyfrowanej wiadmosci
 
             string txtPath = "";    //zmienna gdzie bedziemy przetrzymywać lokalizacje pliku z wzorem podpisu cyfrowego
-            bool isDkimProg = Email.EmailDKIMOrNo();    // funckja gdzie decydujemy czy nasz e-mail ma miec podpis cyfrowy bądz nie
+            bool isDkimProg = EmailHandler.EmailDKIMOrNo();    // funckja gdzie decydujemy czy nasz e-mail ma miec podpis cyfrowy bądz nie
             if (isDkimProg) //jeśli e-mail ma mieć podpid cyfrowy
             {
                 Console.Write("Provide the path of the TXT file to with DKIM: ");   //to podaj ścieżkę pliku z wzorem podpisu cyfrowego
                 txtPath = Console.ReadLine();
             }
 
-            Email.SendEmail(jsonObjectProg["smtpHost"].ToString(), Convert.ToInt32(jsonObjectProg["smtpPort"]), login, passwordProgram, jsonObjectProg["to"].ToString(), jsonObjectProg["subject"].ToString(), bodyProg, isDkimProg, txtPath);   //wywołujemy funkcję SendEmail aby wysłać e-mail. W parametrze textBody przesyłamy zaszyfrowaną wiadomość za pomocą funkcji Encrypt korzystającej z klucza publicznego
+            EmailHandler.SendEmail(jsonObjectProg.smtpHost, jsonObjectProg.smtpPort, login, passwordProgram, jsonObjectProg.to, jsonObjectProg.subject, bodyProg, isDkimProg, txtPath);   //wywołujemy funkcję SendEmail aby wysłać e-mail. W parametrze textBody przesyłamy zaszyfrowaną wiadomość za pomocą funkcji Encrypt korzystającej z klucza publicznego
 
             Console.Write(Environment.NewLine);
-            MimeMessage mimeMessageProg = Email.ReceiveEmail(jsonObjectProg["imapHost"].ToString(), Convert.ToInt32(jsonObjectProg["imapPort"]), login, passwordProgram);    //aby odczytać wiadomość wywołujemy funkcję ReceiveEmail, którą zapisujemy do zmiennej mimeMessageProg
+            MimeMessage mimeMessageProg = EmailHandler.ReceiveEmail(jsonObjectProg.imapHost, jsonObjectProg.imapPort, login, passwordProgram);    //aby odczytać wiadomość wywołujemy funkcję ReceiveEmail, którą zapisujemy do zmiennej mimeMessageProg
 
             string textEncyptToRead = mimeMessageProg.TextBody.Split(Environment.NewLine)[0];
             string checksumToRead = mimeMessageProg.TextBody.Split(Environment.NewLine)[1];
@@ -64,7 +64,7 @@ namespace EmailSendReceive
             Console.WriteLine("textBody checksum: {0}", checksumToRead);   //wyświetlamy sume kontrolną wiadomości 
             Console.Write(Environment.NewLine);
 
-            Email.SaveEmlFile(mimeMessageProg); //funkcja zapisująca e-maila do pliku .eml
+            EmailHandler.SaveEmlFile(mimeMessageProg); //funkcja zapisująca e-maila do pliku .eml
         }
     }
 }

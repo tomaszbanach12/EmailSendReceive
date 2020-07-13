@@ -14,7 +14,7 @@ using System.Security;
 
 namespace EmailSendReceive
 {
-    class Email
+    class EmailHandler
     {
         public static void IsValidEmail(string email)  //walidacja formatu e-maila
         {
