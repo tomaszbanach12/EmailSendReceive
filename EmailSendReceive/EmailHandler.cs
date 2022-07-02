@@ -138,8 +138,8 @@ namespace EmailSendReceive
                 signer.Sign(mimeMessage, headers);
             }
 
-            mimeMessage.From.Add(new MailboxAddress(from)); //od kogo e-mail
-            mimeMessage.To.Add(new MailboxAddress(from));   //do kogo
+            mimeMessage.From.Add(new MailboxAddress(from, from)); //od kogo e-mail
+            mimeMessage.To.Add(new MailboxAddress(from, from));   //do kogo
             mimeMessage.Subject = subject;  //temat
             BodyBuilder bodyBuilder = new BodyBuilder();    //bodyBuilder do tworzenia treści e-maila
             bodyBuilder.TextBody = bodyEmail;   //tekst treści
